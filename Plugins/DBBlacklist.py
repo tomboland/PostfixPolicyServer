@@ -1,6 +1,7 @@
 from Policy import Policy
 
 class DBBlacklist(Policy):
+
   def __init__(self, db, attribute):
     self.db = db
     self.attribute = attribute

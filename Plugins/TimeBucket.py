@@ -5,50 +5,42 @@ from datetime import datetime, timedelta
 
 class TimeBucket(object):
 
-
   # dbc = the database connection that supports get and increment methods
-  def __init__(self, db_conn, t_interval = 15):
+  def __init__(self, db, t_interval = 15, limits = ((15, 100), (60, 1000))):
     self.t_interval = t_interval
-    self.db_conn = db_conn
-    self.limits = {} 
+    self.db = db
+    self.limits = limits 
 
 
   def get_bucket_hash(self, name, t_time):
-#    return sha256(''.join([name, str(t_time)])).hexdigest()
     return ''.join([name, '-', str(t_time)])
 
 
-  def register_limit(self, limit_name, t_window, limit):
-    self.limits[limit_name] = (t_window, limit)
-
-
   def check(self, name, t_time):
-    for limit_name in self.limits:
-      if not self.check_limit(name, t_time, self.limits[limit_name][0], self.limits[limit_name][1]):
-        return (False, 'Rate limit exceeded', "limit exceeded: %s" % limit_name)
-    self.allow_request(name, t_time)
-    return (True, '', '')
+    for window, limit in self.limits:
+      if not self.check_limit(name, t_time, window, limit):
+        return False
+    return True
 
 
   def check_limit(self, name, t_time, t_window, limit):
     sum = 0
     for bucket in self.get_bucket_range(name, t_time, t_window):
-      val = int(self.db_conn.get(bucket))
+      val = int(self.db.get(bucket))
       sum += val
       if val > 0:
         pass
-#        print bucket, val, sum
       if sum >= limit:
         return False
     return True
 
 
-  def allow_request(self, name, t_time):
-    self.db_conn.incr(self.get_bucket_hash(name , self.get_bucket_time(t_time)))
+  def acknowledge_request(self, name, t_time):
+    self.db.incr(self.get_bucket_hash(name , self.get_bucket_time(t_time)))
 
 
   def get_bucket_val(self, bucket):
-    ret = self.db_conn.get(bucket)
+    ret = self.db.get(bucket)
     if ret == None:
       return 0
     else:
