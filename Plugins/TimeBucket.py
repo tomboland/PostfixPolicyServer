@@ -35,8 +35,8 @@ class TimeBucket(object):
     return True
 
 
-  def acknowledge_request(self, name, t_time):
-    self.db.incr(self.get_bucket_hash(name , self.get_bucket_time(t_time)))
+  def increment_counter(self, name, t_time, increment = 1):
+    self.db.incr(self.get_bucket_hash(name, self.get_bucket_time(t_time)), increment = increment)
 
 
   def get_bucket_val(self, bucket):

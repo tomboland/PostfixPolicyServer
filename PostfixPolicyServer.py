@@ -1,36 +1,41 @@
 #!/usr/bin/env python
 
-import asyncore, socket, signal
+import asyncore, socket, signal, os
 
 from Config import Config
-MyConfig = Config('PostfixPolicyServer.conf')
+MyConf = Config('PostfixPolicyServer.conf').conf
 
 from RedisBackend import RedisBackend
-MyRedisBackend = RedisBackend(host = MyConfig.conf.get('RedisBackend', 'redis_host'), db = MyConfig.conf.get('RedisBackend', 'redis_db'))
-
-def shutdown_handler(signum, frame):
-  global MyPolicyServer
-  MyPolicyServer.cleanup()
-  del MyPolicyServer
-  raise asyncore.ExitNow()
+MyRedisBackend = RedisBackend(host = MyConf.get('RedisBackend', 'redis_host'), db = MyConf.get('RedisBackend', 'redis_db'))
 
 from PolicyServer import PolicyServer
-HeloCheckPolicyServer = PolicyServer('0.0.0.0', 10023)
-RecipientCheckPolicyServer = PolicyServer('0.0.0.0', 10024)
+HeloCheckPolicyServer = PolicyServer(MyConf.get('HeloCheckPolicyServer', 'listen_addr'), int(MyConf.get('HeloCheckPolicyServer', 'listen_port')))
+RecipientCheckPolicyServer = PolicyServer(MyConf.get('RecipientCheckPolicyServer', 'listen_addr'), int(MyConf.get('RecipientCheckPolicyServer', 'listen_port')))
 
 from Plugins.DBRateLimit import DBRateLimit
-HeloCheckPolicyServer.register_policy(DBRateLimit(MyRedisBackend, attribute = 'client_address', time_interval = 1, limits = ((1, 10),)))
-RecipientCheckPolicyServer.register_policy(DBRateLimit(MyRedisBackend, attribute = 'sender', time_interval = 1, limits = ((1, 10),)))
-
 from Plugins.DBWhitelist import DBWhitelist
+from Plugins.DBBlacklist import DBBlacklist
+
 HeloCheckPolicyServer.register_policy(DBWhitelist(MyRedisBackend, 'client_address'))
+HeloCheckPolicyServer.register_policy(DBBlacklist(MyRedisBackend, 'client_address'))
+HeloCheckPolicyServer.register_policy(DBRateLimit(MyRedisBackend, attribute = 'client_address', time_interval = 1, limits = ((1, 10),)))
+
 RecipientCheckPolicyServer.register_policy(DBWhitelist(MyRedisBackend, 'sender'))
 RecipientCheckPolicyServer.register_policy(DBWhitelist(MyRedisBackend, 'recipient'))
-
-from Plugins.DBBlacklist import DBBlacklist
-HeloCheckPolicyServer.register_policy(DBBlacklist(MyRedisBackend, 'client_address'))
 RecipientCheckPolicyServer.register_policy(DBBlacklist(MyRedisBackend, 'sender'))
 RecipientCheckPolicyServer.register_policy(DBBlacklist(MyRedisBackend, 'recipient'))
+RecipientCheckPolicyServer.register_policy(DBRateLimit(MyRedisBackend, attribute = 'sender', time_interval = 1, limits = ((1, 10),)))
+
+
+def shutdown_handler(signum, frame):
+  global HeloCheckPolicyServer
+  HeloCheckPolicyServer.cleanup()
+  del HeloCheckPolicyServer
+  global RecipientCheckPolicyServer
+  RecipientCheckPolicyServer.cleanup()
+  del RecipientCheckPolicyServer
+  raise asyncore.ExitNow()
+
 
 if __name__ == "__main__":
 
@@ -39,6 +44,4 @@ if __name__ == "__main__":
   try:
     asyncore.loop()
   except:
-    MyPolicyServer.cleanup()
-    del MyPolicyServer
-    raise asyncore.ExitNow()
+    os.kill(os.getpid(), signal.SIGHUP)

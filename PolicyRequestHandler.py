@@ -12,8 +12,8 @@ class PolicyRequestHandler(asyncore.dispatcher_with_send):
     lines = req_string.split("\n")
     for line in lines:
       if len(line) > 0:
-        line_array = line.split("=", 1)
-        request_d[line_array[0]] = line_array[1]
+        k, v = line.split("=", 1)
+        request_d[k] = v
     print request_d
     self.send("action=%s\n\n" % self.check_policies(request_d))
     self.close()

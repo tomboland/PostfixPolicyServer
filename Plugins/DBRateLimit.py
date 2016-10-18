@@ -12,9 +12,14 @@ class DBRateLimit(Policy):
 
   def check(self, request_d):
     now = datetime.now()
+    try:
+      recipient_count = int(request_d['recipient_count']) if int(request_d['recipient_count']) > 0 else 1
+    except IndexError:
+      recipient_count = 1
+
     if self.MyRateLimiter.check("%s:%s" % (self.attribute, request_d[self.attribute]), now) is not True:
-      return False, "REJECT %s: %s, hit rate-limit" % (self.attribute, request_d[self.attribute])
+      return False, "DEFER %s: %s, hit rate-limit" % (self.attribute, request_d[self.attribute])
     else:
-      self.MyRateLimiter.acknowledge_request("%s:%s" % (self.attribute, request_d[self.attribute]), now)
+      self.MyRateLimiter.increment_counter("%s:%s" % (self.attribute, request_d[self.attribute]), now, increment = recipient_count)
       return True, 'OK'
 
