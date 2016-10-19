@@ -20,10 +20,13 @@ class PolicyRequestHandler(asyncore.dispatcher_with_send):
 
 
   def check_policies(self, request_d):
-    for policy in self.policies:
-      result, action = policy.check(request_d)
-      if result is not True:
-        return action
-        break
+    try:
+      for policy in self.policies:
+        result, action = policy.check(request_d)
+        if result is not True:
+          return action
+          break
+    except Exception, e:
+      print e.message
     return "OK"
 
