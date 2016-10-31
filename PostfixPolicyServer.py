@@ -1,46 +1,34 @@
 #!/usr/bin/env python
 
-import asyncore, socket, signal, os
+import asyncore, socket, signal, os, importlib
+from os import path
+
+MyName = path.splitext(path.basename(__file__))[0]
 
 from Config import Config
-MyConf = Config('PostfixPolicyServer.conf').conf
+MyConf = Config(MyName).conf
+
+import Logging
+logger = Logging.get_logger(dict(MyConf.items('Logging')))
+logger.info('created logger')
 
 from RedisBackend import RedisBackend
-MyRedisBackend = RedisBackend(host = MyConf.get('RedisBackend', 'redis_host'), db = MyConf.get('RedisBackend', 'redis_db'))
+MyDB = RedisBackend(host = MyConf.get('RedisBackend', 'redis_host'), db = MyConf.get('RedisBackend', 'redis_db'))
 
-from PolicyServer import PolicyServer
-HeloCheckPolicyServer = PolicyServer(MyConf.get('HeloCheckPolicyServer', 'listen_addr'), int(MyConf.get('HeloCheckPolicyServer', 'listen_port')))
-RecipientCheckPolicyServer = PolicyServer(MyConf.get('RecipientCheckPolicyServer', 'listen_addr'), int(MyConf.get('RecipientCheckPolicyServer', 'listen_port')))
-
-from Plugins.DBRateLimit import DBRateLimit
-from Plugins.DBWhitelist import DBWhitelist
-from Plugins.DBBlacklist import DBBlacklist
-
-HeloCheckPolicyServer.register_policy(DBWhitelist(MyRedisBackend, 'client_address'))
-HeloCheckPolicyServer.register_policy(DBBlacklist(MyRedisBackend, 'client_address'))
-HeloCheckPolicyServer.register_policy(DBRateLimit(MyRedisBackend, attribute = 'client_address', time_interval = 1, limits = ((1, 10),)))
-
-RecipientCheckPolicyServer.register_policy(DBWhitelist(MyRedisBackend, 'sender'))
-RecipientCheckPolicyServer.register_policy(DBWhitelist(MyRedisBackend, 'recipient'))
-RecipientCheckPolicyServer.register_policy(DBBlacklist(MyRedisBackend, 'sender'))
-RecipientCheckPolicyServer.register_policy(DBBlacklist(MyRedisBackend, 'recipient'))
-RecipientCheckPolicyServer.register_policy(DBRateLimit(MyRedisBackend, attribute = 'sender', time_interval = 1, limits = ((1, 10),)))
-
+mod = importlib.import_module(MyConf.get('PostfixPolicyServer', 'service_configuration'), MyConf)
+PolicyServers = mod.PolicyServers(MyDB)
 
 def shutdown_handler(signum, frame):
-  global HeloCheckPolicyServer
-  HeloCheckPolicyServer.cleanup()
-  del HeloCheckPolicyServer
-  global RecipientCheckPolicyServer
-  RecipientCheckPolicyServer.cleanup()
-  del RecipientCheckPolicyServer
+  global PolicyServers
+  for PolicyServer in PolicyServers:
+    PolicyServer.cleanup()
+    del PolicyServer
   raise asyncore.ExitNow()
 
 
 if __name__ == "__main__":
-
+  logger.info('starting up')
   signal.signal(signal.SIGHUP, shutdown_handler)
-
   try:
     asyncore.loop()
   except:

@@ -31,19 +31,35 @@ class RedisBackend(object):
       return ret
 
 
-  def incr(self, key, increment = 1):
+  def incr(self, key, incr = 1):
     if not self.get_conn().exists(key):
-      return self.get_conn().set(key, increment, ex = 86400)
+      return self.get_conn().set(key, incr, ex = 86400)
     else:
-      if increment == 1:
+      if incr == 1:
         return self.get_conn().incr(key)
       else:
-        return self.get_conn().incrby(key, increment)
+        return self.get_conn().incrby(key, incr)
 
 
-  def is_in(self, key, field):
+  def is_in_hash(self, key, field):
     if self.get_conn().hexists(key, field) == 0:
       return False
     else:
       return True
-      
+
+
+  def hset(self, key, field, value):
+    self.get_conn().hset(key, field, value)
+
+
+  def hget(self, key, field):
+    return self.get_conn().hset(key, field)
+
+
+  def hgetall(self, key):
+    return self.get_conn().hgetall(key)
+
+
+  def zadd(self, key, score, field):
+    print key, score, field
+    return self.get_conn().zadd(key, field, score)

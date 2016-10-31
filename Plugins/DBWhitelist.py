@@ -2,14 +2,17 @@ from Policy import Policy
 
 class DBWhitelist(Policy):
 
-  def __init__(self, db, attribute):
+  def __init__(self, db, key):
     self.db = db
-    self.attribute = attribute
+    self.key = key
 
   # Return False if user in whitelist, with 'OK' as the action as this short-circuits the other checks
-  def check(self, request_d):
-    if self.db.is_in("%s_whitelist" % self.attribute, request_d[self.attribute]):
-      return False, 'OK'
-    else:
-      return True, 'OK'
- 
+  def check(self, req):
+    fields = self.get_fields(str(req[self.key]))
+    try:
+      for field in fields:
+        if self.db.is_in_hash("%s_whitelist" % self.key, field):
+          return False, "OK %s is whitelisted" % self.key
+    except Exception, e:
+      raise Exception("DBWhitelist: request failed, skipping checks: %s" % str(e))
+    return True, 'OK'

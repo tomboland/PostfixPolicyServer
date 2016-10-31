@@ -2,13 +2,16 @@ from Policy import Policy
 
 class DBBlacklist(Policy):
 
-  def __init__(self, db, attribute):
+  def __init__(self, db, key):
     self.db = db
-    self.attribute = attribute
+    self.key = key
 
-  def check(self, request_d):
-    if self.db.is_in("%s_blacklist" % self.attribute, request_d[self.attribute]):
-      return False, "REJECT %s: %s, is blacklisted" % (self.attribute, request_d[self.attribute])
-    else:
-      return True, 'OK'
-
+  def check(self, req):
+    fields = self.get_fields(str(req[self.key]))
+    try:
+      for field in fields:
+        if self.db.is_in_hash("%s_blacklist" % self.key, field):
+          return False, "REJECT %s: %s, is blacklisted" % (self.key, field)
+    except Exception, e:
+      raise Exception ("DBBlacklist: request failed, skipping checks: %s" % str(e))
+    return True, 'OK'
